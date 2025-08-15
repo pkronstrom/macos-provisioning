@@ -15,6 +15,29 @@ check_command() {
     fi
 }
 
+safe_overwrite() {
+    local file_path="$1"
+    local description="$2"
+    
+    if [[ -f "$file_path" ]]; then
+        echo "⚠️ Existing $description found at: $file_path"
+        read -p "Do you want to overwrite it? (y/N): " -n 1 -r
+        echo
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "📋 Creating backup..."
+            cp "$file_path" "${file_path}.backup.$(date +%Y%m%d_%H%M%S)"
+            echo "✅ Backup created, proceeding with overwrite"
+            return 0
+        else
+            echo "⏭️ Skipping $description setup"
+            return 1
+        fi
+    fi
+    
+    return 0
+}
+
 install_xcode_cli_tools() {
     echo "📦 Checking Xcode Command Line Tools..."
     if xcode-select -p &> /dev/null; then
@@ -102,6 +125,11 @@ setup_fish_config() {
     # Create fish config directory
     mkdir -p ~/.config/fish/conf.d
     
+    # Check if we should overwrite existing config
+    if ! safe_overwrite ~/.config/fish/config.fish "Fish configuration"; then
+        return 0
+    fi
+    
     # Basic Fish configuration
     cat > ~/.config/fish/config.fish << 'EOF'
 # Basic Fish configuration
@@ -118,8 +146,9 @@ set -gx PATH ~/.local/bin $PATH
 set -gx PATH ~/.local/share/pnpm $PATH
 
 # Aliases
-alias ll "ls -la"
-alias la "ls -la"
+alias ll "eza -la"
+alias la "eza -la"
+alias ls "eza"
 alias cat "bat"
 alias find "fd"
 alias grep "rg"
@@ -131,7 +160,7 @@ alias gc "git commit"
 alias gp "git push"
 alias gl "git log --oneline"
 
-# Load direnv if available
+# Load direnv hook
 if command -v direnv > /dev/null
     direnv hook fish | source
 end

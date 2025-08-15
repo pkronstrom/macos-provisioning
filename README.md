@@ -35,9 +35,10 @@ Safe to run multiple times - checks for existing installations before attempting
 
 ### Fish Shell Setup
 - Sets Fish as your default shell
-- Configures useful aliases (`ll`, `cat` → `bat`, `grep` → `rg`, etc.)
+- Configures useful aliases (`ll` → `eza -la`, `cat` → `bat`, `grep` → `rg`, etc.)
 - Includes common Git aliases
-- Adds Homebrew and pnpm to PATH
+- Adds Homebrew, pipx, and pnpm to PATH
+- **Prompts before overwriting** existing Fish config (creates backup if you proceed)
 
 ### Global Package Management
 - Sets up `pipx` for Python CLI tools
