@@ -212,6 +212,9 @@ setup_fish_config() {
         cp fish-config-template.fish ~/.config/fish/config.fish
         echo "✅ Fish configuration created from template"
         
+        # Create bin directory for custom scripts
+        mkdir -p ~/.bin
+        
         # Create secrets template
         if [[ ! -f ~/.config/fish/secrets.fish ]]; then
             cat > ~/.config/fish/secrets.fish << 'EOF'
@@ -395,26 +398,68 @@ setup_direnv() {
     echo "📁 Setting up direnv..."
     
     if check_command "direnv"; then
-        # Create sample .envrc
+        # Create sample .envrc with better structure
         if [[ ! -f ".envrc" ]]; then
             cat > .envrc << 'EOF'
-# Example environment variables
-# export API_KEY="your-api-key"
-# export DATABASE_URL="your-database-url"
+#!/usr/bin/env bash
+# Project environment variables (safe to commit)
 
-# Load local overrides if they exist
-# source_env_if_exists .envrc.local
+# Development settings
+export NODE_ENV="development"
+export DEBUG="true"
+
+# Project paths
+export PROJECT_ROOT="$(pwd)"
+export DATA_DIR="$PROJECT_ROOT/data"
+
+# Load machine-specific secrets (not committed to git)
+source_env_if_exists .envrc.local
+
+# Load shared team secrets if available
+source_env_if_exists .envrc.shared
+
+# Example API configurations (move actual keys to .envrc.local)
+# export API_BASE_URL="https://api.example.com"
+# export API_TIMEOUT="30"
 EOF
-            echo "📄 Created sample .envrc file"
+            echo "📄 Created enhanced .envrc file"
         fi
         
-        # Create .envrc.local template
+        # Create .envrc.local template with better examples
         if [[ ! -f ".envrc.local" ]]; then
             cat > .envrc.local << 'EOF'
-# Local environment variables (ignored by git)
-# Add your secrets here
+#!/usr/bin/env bash
+# Machine-specific environment variables (ignored by git)
+# Add your secrets and local overrides here
+
+# API Keys (example - uncomment and fill in)
+# export OPENAI_API_KEY="sk-..."
+# export GROQ_API_KEY="gsk_..."
+# export GITHUB_TOKEN="ghp_..."
+
+# Local development overrides
+# export DATABASE_URL="postgresql://localhost:5432/myapp_dev"
+# export REDIS_URL="redis://localhost:6379"
+
+# Machine-specific paths
+# export JAVA_HOME="/path/to/your/java"
 EOF
-            echo "📄 Created .envrc.local template"
+            chmod 600 .envrc.local  # Secure permissions
+            echo "📄 Created .envrc.local template with secure permissions"
+        fi
+        
+        # Create optional shared secrets template
+        if [[ ! -f ".envrc.shared" ]]; then
+            cat > .envrc.shared << 'EOF'
+#!/usr/bin/env bash
+# Shared team secrets (optional)
+# This file can be encrypted with git-crypt or stored separately
+
+# Shared development API keys
+# export STAGING_API_KEY="shared-staging-key"
+# export TEST_DATABASE_URL="shared-test-db"
+EOF
+            echo "📄 Created .envrc.shared template"
         fi
         
         echo "✅ direnv setup complete"
@@ -433,6 +478,9 @@ create_gitignore() {
 
 # Fish secrets
 secrets.fish
+
+# Direnv local files
+.envrc.local
 
 # macOS
 .DS_Store

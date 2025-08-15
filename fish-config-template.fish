@@ -23,8 +23,9 @@ end
 # gpg
 set -gx GPG_TTY (tty)
 
-# .bin directory
+# .bin directory  
 fish_add_path $HOME/.bin/balena-cli
+fish_add_path $HOME/.bin            # For your custom scripts
 
 # functions
 function r
