@@ -42,12 +42,40 @@ install_xcode_cli_tools() {
     echo "📦 Checking Xcode Command Line Tools..."
     if xcode-select -p &> /dev/null; then
         echo "✅ Xcode Command Line Tools already installed"
-    else
-        echo "🔧 Installing Xcode Command Line Tools..."
-        xcode-select --install
-        echo "⏳ Please complete the Xcode CLI tools installation and re-run this script"
-        exit 1
+        return 0
     fi
+    
+    echo "🔧 Installing Xcode Command Line Tools..."
+    xcode-select --install 2>/dev/null || {
+        echo "❌ Failed to trigger Xcode CLI tools installation"
+        echo "Please install manually: xcode-select --install"
+        return 1
+    }
+    
+    echo "⏳ Waiting for Xcode CLI tools installation to complete..."
+    echo "This may take several minutes..."
+    
+    # Wait for installation to complete with timeout
+    local timeout=1800  # 30 minutes timeout
+    local elapsed=0
+    
+    while ! xcode-select -p &> /dev/null; do
+        if [[ $elapsed -ge $timeout ]]; then
+            echo "❌ Xcode CLI tools installation timed out"
+            echo "Please complete the installation manually and re-run this script"
+            return 1
+        fi
+        
+        sleep 10
+        elapsed=$((elapsed + 10))
+        
+        # Show progress every minute
+        if [[ $((elapsed % 60)) -eq 0 ]]; then
+            echo "⏳ Still waiting... ($((elapsed / 60)) minutes elapsed)"
+        fi
+    done
+    
+    echo "✅ Xcode Command Line Tools installation complete"
 }
 
 install_rosetta() {
@@ -68,26 +96,68 @@ install_homebrew() {
     echo "🍺 Checking Homebrew..."
     if check_command "brew"; then
         echo "🔄 Updating Homebrew..."
-        brew update
+        if ! brew update; then
+            echo "⚠️ Failed to update Homebrew, continuing anyway"
+        fi
     else
         echo "🔧 Installing Homebrew..."
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        
+        # Download and verify Homebrew installer
+        local temp_script=$(mktemp)
+        echo "📥 Downloading Homebrew installer..."
+        
+        if ! curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh > "$temp_script"; then
+            echo "❌ Failed to download Homebrew installer"
+            rm -f "$temp_script"
+            return 1
+        fi
+        
+        # Basic validation - check if it looks like the expected script
+        if ! grep -q "Homebrew" "$temp_script" || ! grep -q "install" "$temp_script"; then
+            echo "❌ Downloaded script doesn't appear to be the Homebrew installer"
+            rm -f "$temp_script"
+            return 1
+        fi
+        
+        echo "✅ Homebrew installer validated, proceeding with installation..."
+        if ! /bin/bash "$temp_script"; then
+            echo "❌ Homebrew installation failed"
+            rm -f "$temp_script"
+            return 1
+        fi
+        
+        rm -f "$temp_script"
         
         # Add Homebrew to PATH for Apple Silicon
         if [[ $(uname -m) == "arm64" ]]; then
             echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
             eval "$(/opt/homebrew/bin/brew shellenv)"
         fi
+        
+        echo "✅ Homebrew installed successfully"
     fi
 }
 
 install_packages() {
     echo "📦 Installing packages from Brewfile..."
-    if [[ -f "Brewfile" ]]; then
-        brew bundle
+    if [[ -f "Brewfile" && -r "Brewfile" ]]; then
+        # Basic validation of Brewfile
+        if ! grep -q "^brew\|^cask\|^tap\|^#" "Brewfile"; then
+            echo "❌ Brewfile appears to be invalid (no brew/cask/tap entries found)"
+            return 1
+        fi
+        
+        echo "✅ Brewfile validated, installing packages..."
+        if brew bundle; then
+            echo "✅ All packages installed successfully"
+        else
+            echo "⚠️ Some packages failed to install"
+            echo "Check the output above for details"
+            echo "You can run 'brew bundle' manually to retry"
+        fi
     else
-        echo "❌ Brewfile not found!"
-        exit 1
+        echo "❌ Brewfile not found or not readable!"
+        return 1
     fi
 }
 
@@ -112,8 +182,14 @@ setup_fish_shell() {
     # Set fish as default shell if not already
     if [[ "$SHELL" != "$FISH_PATH" ]]; then
         echo "🔧 Setting Fish as default shell..."
-        chsh -s "$FISH_PATH"
-        echo "ℹ️ Please restart your terminal or run 'exec fish' to use Fish shell"
+        if chsh -s "$FISH_PATH"; then
+            echo "✅ Fish set as default shell"
+            echo "ℹ️ Please restart your terminal or run 'exec fish' to use Fish shell"
+        else
+            echo "❌ Failed to change shell to Fish"
+            echo "You may need to run 'chsh -s $FISH_PATH' manually"
+            echo "Or add Fish to /etc/shells if it's missing"
+        fi
     else
         echo "✅ Fish is already the default shell"
     fi
@@ -130,8 +206,33 @@ setup_fish_config() {
         return 0
     fi
     
-    # Basic Fish configuration
-    cat > ~/.config/fish/config.fish << 'EOF'
+    # Use template if available, otherwise fall back to basic config
+    if [[ -f "fish-config-template.fish" ]]; then
+        echo "📋 Using fish-config-template.fish..."
+        cp fish-config-template.fish ~/.config/fish/config.fish
+        echo "✅ Fish configuration created from template"
+        
+        # Create secrets template
+        if [[ ! -f ~/.config/fish/secrets.fish ]]; then
+            cat > ~/.config/fish/secrets.fish << 'EOF'
+# Fish secrets file - Add your API keys and sensitive environment variables here
+# This file should not be committed to git
+
+# Example API keys (uncomment and fill in as needed):
+# set -x OPENAI_API_KEY "your-openai-api-key"
+# set -x GROQ_API_KEY "your-groq-api-key"
+# set -x OPENROUTER_API_KEY "your-openrouter-api-key"
+# set -x GEMINI_API_KEY "your-gemini-api-key"
+# set -x AZURE_API_BASE "https://your-azure-endpoint.openai.azure.com/"
+# set -x AZURE_API_VERSION "2024-07-01-preview"
+EOF
+            chmod 600 ~/.config/fish/secrets.fish  # Secure permissions
+            echo "📄 Created secrets.fish template with secure permissions"
+        fi
+    else
+        echo "⚠️ fish-config-template.fish not found, using basic configuration..."
+        # Basic Fish configuration
+        cat > ~/.config/fish/config.fish << 'EOF'
 # Basic Fish configuration
 set -g fish_greeting ""
 
@@ -165,8 +266,92 @@ if command -v direnv > /dev/null
     direnv hook fish | source
 end
 EOF
+        echo "✅ Basic Fish configuration created"
+    fi
+}
 
-    echo "✅ Fish configuration created"
+setup_vim_config() {
+    echo "📝 Setting up Vim configuration..."
+    
+    # Check if vim is installed
+    if ! check_command "vim"; then
+        echo "❌ Vim not found. Make sure it's in your Brewfile."
+        return 1
+    fi
+    
+    # Check if we should overwrite existing config
+    if ! safe_overwrite ~/.vimrc "Vim configuration"; then
+        return 0
+    fi
+    
+    # Use template if available, otherwise fall back to basic config
+    if [[ -f "vim-config-template.vim" ]]; then
+        echo "📋 Using vim-config-template.vim..."
+        cp vim-config-template.vim ~/.vimrc
+        echo "✅ Vim configuration created from template"
+        
+        # Install Vundle if not already installed
+        if [[ ! -d ~/.vim/bundle/Vundle.vim ]]; then
+            echo "📦 Installing Vundle plugin manager..."
+            if git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim; then
+                echo "✅ Vundle installed"
+            else
+                echo "❌ Failed to install Vundle"
+                echo "Please install manually: git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim"
+                return 1
+            fi
+        else
+            echo "✅ Vundle already installed"
+        fi
+        
+        # Install plugins with timeout
+        echo "📦 Installing Vim plugins..."
+        if timeout 300 vim +PluginInstall +qall; then
+            echo "✅ Vim plugins installed"
+        else
+            echo "⚠️ Vim plugin installation timed out or failed"
+            echo "You can run 'vim +PluginInstall +qall' manually later"
+        fi
+        
+    else
+        echo "⚠️ vim-config-template.vim not found, using basic configuration..."
+        # Basic Vim configuration
+        cat > ~/.vimrc << 'EOF'
+set nocompatible
+filetype off
+
+set rtp+=~/.vim/bundle/Vundle.vim
+call vundle#begin()
+
+Plugin 'VundleVim/Vundle.vim'
+Plugin 'morhetz/gruvbox'
+
+call vundle#end()
+filetype plugin indent on
+
+syntax on
+colorscheme gruvbox
+set number
+set expandtab
+set tabstop=4
+set shiftwidth=4
+EOF
+        echo "✅ Basic Vim configuration created"
+        
+        # Install Vundle and plugins for basic config too
+        if [[ ! -d ~/.vim/bundle/Vundle.vim ]]; then
+            echo "📦 Installing Vundle plugin manager..."
+            git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
+        fi
+        
+        echo "📦 Installing Vim plugins..."
+        if timeout 300 vim +PluginInstall +qall; then
+            echo "✅ Basic Vim setup complete"
+        else
+            echo "⚠️ Vim plugin installation timed out or failed"
+            echo "You can run 'vim +PluginInstall +qall' manually later"
+        fi
+    fi
 }
 
 setup_global_packages() {
@@ -246,6 +431,9 @@ create_gitignore() {
 # Environment variables
 .envrc.local
 
+# Fish secrets
+secrets.fish
+
 # macOS
 .DS_Store
 .DS_Store?
@@ -283,6 +471,7 @@ main() {
     install_packages
     setup_fish_shell
     setup_fish_config
+    setup_vim_config
     setup_global_packages
     setup_direnv
     create_gitignore
