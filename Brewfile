@@ -56,6 +56,10 @@ cask "lmstudio"
 cask "adguard"
 cask "appcleaner"
 
+# Media Tools (uncomment as needed)
+#brew "yt-dlp"               # YouTube downloader
+#brew "yle-dl"               # YLE (Finnish Broadcasting) downloader
+
 # Optional/Specialized Tools (uncomment as needed)
 #cask "android-platform-tools"
 #cask "bluesnooze"

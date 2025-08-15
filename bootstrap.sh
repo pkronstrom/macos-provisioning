@@ -206,35 +206,38 @@ setup_fish_config() {
         return 0
     fi
     
-    # Use template if available, otherwise fall back to basic config
-    if [[ -f "fish-config-template.fish" ]]; then
+    # Choose between minimal and full template
+    local template_choice=""
+    if [[ -f "fish-config-template-minimal.fish" && -f "fish-config-template.fish" ]]; then
+        echo "🐟 Choose Fish configuration:"
+        echo "1) Minimal - Basic setup with essential aliases"
+        echo "2) Full - Complete setup with all functions and aliases"
+        read -p "Enter choice (1 or 2, default: 1): " -n 1 -r template_choice
+        echo
+        
+        case $template_choice in
+            2)
+                echo "📋 Using full fish-config-template.fish..."
+                cp fish-config-template.fish ~/.config/fish/config.fish
+                echo "✅ Full Fish configuration created from template"
+                ;;
+            *)
+                echo "📋 Using minimal fish-config-template-minimal.fish..."
+                cp fish-config-template-minimal.fish ~/.config/fish/config.fish
+                echo "✅ Minimal Fish configuration created from template"
+                ;;
+        esac
+    elif [[ -f "fish-config-template-minimal.fish" ]]; then
+        echo "📋 Using fish-config-template-minimal.fish..."
+        cp fish-config-template-minimal.fish ~/.config/fish/config.fish
+        echo "✅ Minimal Fish configuration created from template"
+    elif [[ -f "fish-config-template.fish" ]]; then
         echo "📋 Using fish-config-template.fish..."
         cp fish-config-template.fish ~/.config/fish/config.fish
         echo "✅ Fish configuration created from template"
-        
-        # Create bin directory for custom scripts
-        mkdir -p ~/.bin
-        
-        # Create secrets template
-        if [[ ! -f ~/.config/fish/secrets.fish ]]; then
-            cat > ~/.config/fish/secrets.fish << 'EOF'
-# Fish secrets file - Add your API keys and sensitive environment variables here
-# This file should not be committed to git
-
-# Example API keys (uncomment and fill in as needed):
-# set -x OPENAI_API_KEY "your-openai-api-key"
-# set -x GROQ_API_KEY "your-groq-api-key"
-# set -x OPENROUTER_API_KEY "your-openrouter-api-key"
-# set -x GEMINI_API_KEY "your-gemini-api-key"
-# set -x AZURE_API_BASE "https://your-azure-endpoint.openai.azure.com/"
-# set -x AZURE_API_VERSION "2024-07-01-preview"
-EOF
-            chmod 600 ~/.config/fish/secrets.fish  # Secure permissions
-            echo "📄 Created secrets.fish template with secure permissions"
-        fi
     else
-        echo "⚠️ fish-config-template.fish not found, using basic configuration..."
-        # Basic Fish configuration
+        echo "⚠️ No fish config templates found, using basic configuration..."
+        # Basic Fish configuration fallback
         cat > ~/.config/fish/config.fish << 'EOF'
 # Basic Fish configuration
 set -g fish_greeting ""
@@ -246,10 +249,10 @@ set -gx PATH /opt/homebrew/sbin $PATH
 # Python pipx path
 set -gx PATH ~/.local/bin $PATH
 
-# Node.js paths
-set -gx PATH ~/.local/share/pnpm $PATH
+# Custom bin directory
+fish_add_path ~/.bin
 
-# Aliases
+# Basic aliases
 alias ll "eza -la"
 alias la "eza -la"
 alias ls "eza"
@@ -270,6 +273,27 @@ if command -v direnv > /dev/null
 end
 EOF
         echo "✅ Basic Fish configuration created"
+    fi
+    
+    # Create bin directory for custom scripts (always needed)
+    mkdir -p ~/.bin
+        
+    # Create secrets template (always create)
+    if [[ ! -f ~/.config/fish/secrets.fish ]]; then
+        cat > ~/.config/fish/secrets.fish << 'EOF'
+# Fish secrets file - Add your API keys and sensitive environment variables here
+# This file should not be committed to git
+
+# Example API keys (uncomment and fill in as needed):
+# set -x OPENAI_API_KEY "your-openai-api-key"
+# set -x GROQ_API_KEY "your-groq-api-key"
+# set -x OPENROUTER_API_KEY "your-openrouter-api-key"
+# set -x GEMINI_API_KEY "your-gemini-api-key"
+# set -x AZURE_API_BASE "https://your-azure-endpoint.openai.azure.com/"
+# set -x AZURE_API_VERSION "2024-07-01-preview"
+EOF
+        chmod 600 ~/.config/fish/secrets.fish  # Secure permissions
+        echo "📄 Created secrets.fish template with secure permissions"
     fi
 }
 
